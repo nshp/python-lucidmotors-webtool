@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+  <head>
+    {% block head %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %} - Unofficial Lucid API</title>
+    {% endblock %}
+  </head>
+  <body>
+    <header>
+      <h1><center>Unofficial Lucid API</center></h1>
+      <hr/>
+    </header>
+    {% if errors %}
+    <article id="messages">
+      <ul>
+        {% for message in errors %}
+        <li><strong>{{ message }}</strong></li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endif %}
+    <article id="content">{% block content %}{% endblock %}</article>
+    <footer>
+      {% block footer %}
+      <hr/>
+      <ul>
+        <li>&copy; Copyright 2023 Nick Shipp</li>
+        <li>Powered by <a href="https://github.com/nshp/python-lucidmotors">python-lucidmotors</a></li>
+      </ul>
+      {% endblock %}
+    </footer>
+  </body>
+</html>

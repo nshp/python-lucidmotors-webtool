@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block title %}Log In{% endblock %}
+{% block content %}
+<h2>Log In</h2>
+<p>This is a data gathering tool for the <a href="https://github.com/nshp/python-lucidmotors">unofficial Lucid API client</a>. We are looking for a variety of vehicle configurations and states to expand our support.
+<p>Please log in with your Lucid account credentials.
+<p>Your vehicle data will be fetched from the Lucid API and displayed to you with your sensitive data like session tokens, VINs, and location already redacted. You will have the opportunity to review the data before sharing any of it.
+<form method="POST" action="/">
+    <label for="email">Email Address</label>
+    <input type="email" name="email" />
+    <label for="password">Password</label>
+    <input type="password" name="password" />
+    <input type="submit" value="Log In" />
+</form>
+{% endblock %}

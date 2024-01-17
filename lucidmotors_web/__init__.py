@@ -13,6 +13,7 @@ import json
 import grpc
 import grpc.aio
 import time
+import gzip
 import aiohttp
 import asyncio
 import google._upb
@@ -237,13 +238,14 @@ def submit():
         return render_template("login.html", errors=errors)
 
     data = grpc + '\n\n\n' + jsn
-    sha = sha1(data.encode('utf-8', errors='replace')).hexdigest()
+    data_bytes = data.encode('utf-8', errors='replace')
+    sha = sha1(data_bytes).hexdigest()
 
     app.logger.info(f'Submission from {request.remote_addr}: {sha}')
 
-    filepath = submissions_dir / f'submission.{sha}.txt'
+    filepath = submissions_dir / f'submission.{sha}.gz'
     if not filepath.exists():
-        with open(filepath, 'w') as f:
-            f.write(data)
+        with gzip.open(filepath, 'w') as f:
+            f.write(data_bytes)
 
     return render_template("thanks.html")

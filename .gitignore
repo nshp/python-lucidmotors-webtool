@@ -162,3 +162,5 @@ cython_debug/
 
 # Protobuf generated files
 gen/
+
+.*.sw*

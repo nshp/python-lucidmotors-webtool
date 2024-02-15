@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block title %}Upload Profile Photo{% endblock %}
+{% block content %}
+<h2>Upload Profile Photo</h2>
+<p>Lucid's in-app profile photo upload functionality is having some difficulties right now. This tool uses the <a href="https://github.com/nshp/python-lucidmotors">unofficial Lucid API client</a> to work around the problem. Neither your photo nor your credentials will be saved here.
+<p>Please enter your Lucid account credentials, then select your desired profile photo. This simple tool does not offer anything fancy like cropping, so please crop your photo to a reasonably sized square and save as a PNG or JPEG before uploading.
+<form method="POST" action="/avatar" enctype="multipart/form-data">
+    <label for="email">Email Address</label>
+    <input type="email" name="email" />
+    <label for="password">Password</label>
+    <input type="password" name="password" />
+    <label for="photo">Photo</label>
+    <input type="file" name="photo" accept="image/png, image/jpeg" />
+    <br /><br />
+    <input type="submit" value="Submit" />
+</form>
+{% endblock %}

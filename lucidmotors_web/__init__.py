@@ -1,10 +1,11 @@
 from flask import Flask, render_template, session, redirect, url_for, request
 
-from typing import Any
+from typing import Any, Optional
 from google.protobuf.unknown_fields import UnknownFieldSet
 from grpc.aio import ClientCallDetails, UnaryUnaryCall
 from hashlib import sha1
 from pathlib import Path
+from base64 import b64encode
 
 import os
 import sys
@@ -18,6 +19,8 @@ import aiohttp
 import asyncio
 import google._upb
 import google.protobuf
+
+from lucidmotors import LucidAPI, APIError
 
 from lucidmotors.gen import login_session_pb2
 from lucidmotors.gen import login_session_pb2_grpc
@@ -114,10 +117,12 @@ def grpc_dump_recursive(message: Any, depth: int = 0) -> str:
 
 
 async def grpc_dump_user_vehicles(username: str, password: str) -> str:
+    app.logger.info('Creating gRPC channel')
     cmgr = grpc.aio.secure_channel("mobile.deneb.prod.infotainment.pdx.atieva.com",
                                    grpc.ssl_channel_credentials())
 
     async with cmgr as channel:
+        app.logger.info('Channel opened')
         login_service = login_session_pb2_grpc.LoginSessionStub(channel)
 
         device_id = f'{uuid.getnode():x}'
@@ -136,6 +141,13 @@ async def grpc_dump_user_vehicles(username: str, password: str) -> str:
         text = grpc_dump_recursive(response)
 
     return text
+
+async def grpc_set_user_avatar(username: str, password: str, avatar: bytes) -> Optional[str]:
+    async with LucidAPI() as api:
+        await api.login(username, password)
+        url = await api.set_profile_photo(avatar)
+
+    return url
 
 async def json_login_request(username: str, password: str) -> Any:
     request = {
@@ -180,7 +192,7 @@ async def json_login_request(username: str, password: str) -> Any:
             'emaid'
         ] = '[removed]'
         raw['userVehicleData'][i]['vehicleConfig']['chargingAccounts'][0][
-            '[removed]'
+            'vehicleId'
         ] = '[removed]'
         raw['userVehicleData'][i]['vehicleState']['gps']['location'][
             'latitude'
@@ -221,7 +233,7 @@ async def index():
 
     return render_template("login.html")
 
-submissions_dir = Path('./submissions')
+submissions_dir = Path('/home/user/submissions')
 @app.route("/submit", methods=["POST"])
 def submit():
     grpc = request.form.get('grpc', None)
@@ -249,3 +261,33 @@ def submit():
             f.write(data_bytes)
 
     return render_template("thanks.html")
+
+@app.route("/avatar", methods=["GET", "POST"])
+async def avatar():
+    if request.method == "POST":
+        errors = []
+        email = request.form.get('email', None)
+        password = request.form.get('password', None)
+        photo = request.files.get('photo', None)
+
+        if email is None:
+            errors.append("Email address is a required field")
+        if password is None:
+            errors.append("Password is a required field")
+        if photo is None:
+            errors.append("Photo is a required field")
+
+        if errors:
+            return render_template("avatar.html", errors=errors)
+
+        try:
+            url = await grpc_set_user_avatar(email, password, photo.read())
+        except APIError as exc:
+            return render_template("avatar.html", errors=[str(exc)])
+
+        return render_template(
+            "avatar_response.html",
+            url=url,
+        )
+
+    return render_template("avatar.html")

@@ -1,0 +1,21 @@
+{% extends "layout.html" %}
+{% block title %}Referral History{% endblock %}
+{% block content %}
+<h2>Referral History</h2>
+<p>This tool uses the <a href="https://github.com/nshp/python-lucidmotors">unofficial Lucid API client</a> to fetch and display your referral history.
+<p>Please enter your Lucid account credentials.
+<form method="POST" action="/referrals" enctype="multipart/form-data">
+    <label for="email">Email Address</label>
+    <input type="email" name="email" />
+    <label for="password">Password</label>
+    <input type="password" name="password" />
+    <label for="region">Region</label>
+    <select name="region">
+        <option value="us" selected>United States</option>
+        <option value="eu">Europe</option>
+        <option value="sa">Saudi Arabia</option>
+    </select>
+    <br /><br />
+    <input type="submit" value="Submit" />
+</form>
+{% endblock %}

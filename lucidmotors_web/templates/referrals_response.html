@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% block title %}Referral History{% endblock %}
+{% block content %}
+<h2>Referral History</h2>
+
+<article>
+    <h3>Referral account info</h3>
+    <table>
+        <tbody>
+            <tr>
+                <th scope="row">Status</th>
+                <td>{{ data.status }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Points balance</th>
+                <td>{{ data.pointsBalance }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Referral count</th>
+                <td>{{ data.totalReferralCount }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Valid state</th>
+                <td>{{ data.validState }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Valid age</th>
+                <td>{{ data.validAge }}</td>
+            </tr>
+            <tr>
+                <th scope="row">Country</th>
+                <td>{{ data.country }}</td>
+            </tr>
+            {% for attr in data.member_attributes %}
+            <tr>
+                <th scope="row">{{ attr.name }}</th>
+                <td>{{ attr.value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+
+<article>
+    <h3>Referral history</h3>
+    <table>
+        <thead>
+            <th scope="column">Status</th>
+            <th scope="column">Points</th>
+            <th scope="column">Date</th>
+            <th scope="column">Trim</th>
+        </thead>
+        <tbody>
+            {% for ref in data.referrals %}
+            <tr>
+                <td>{{ ref.referralStatus }}</td>
+                <td>{{ ref.referralPoints }}</td>
+                <td><time datetime="{{ ref.referralDate|format_datetime('%Y-%m-%d') }}">{{ ref.referralDate|format_datetime('%m/%d/%Y') }}</time></td>
+                <td>{{ ref.trim }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endblock %}

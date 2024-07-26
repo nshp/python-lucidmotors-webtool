@@ -163,4 +163,5 @@ cython_debug/
 # Protobuf generated files
 gen/
 
-.*.sw*
+# Vim swap files
+.*.sw?

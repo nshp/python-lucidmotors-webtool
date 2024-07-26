@@ -6,8 +6,10 @@ from grpc.aio import ClientCallDetails, UnaryUnaryCall
 from hashlib import sha1
 from pathlib import Path
 from base64 import b64encode
+from datetime import datetime
 
 import os
+import re
 import sys
 import uuid
 import json
@@ -20,7 +22,7 @@ import asyncio
 import google._upb
 import google.protobuf
 
-from lucidmotors import LucidAPI, APIError
+from lucidmotors import LucidAPI, APIError, APIValueError, ReferralData, Region
 
 from lucidmotors.gen import login_session_pb2
 from lucidmotors.gen import login_session_pb2_grpc
@@ -74,6 +76,11 @@ sensitive_fields = {
     'longitude',
 }
 
+@app.template_filter()
+def format_datetime(value: str, fmt: str):
+    dt = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.000Z')
+    return dt.strftime(fmt)
+
 def grpc_dump_recursive(message: Any, depth: int = 0) -> str:
     response = ''
 
@@ -116,9 +123,9 @@ def grpc_dump_recursive(message: Any, depth: int = 0) -> str:
     return response
 
 
-async def grpc_dump_user_vehicles(username: str, password: str) -> str:
+async def grpc_dump_user_vehicles(username: str, password: str, region: Region) -> str:
     app.logger.info('Creating gRPC channel')
-    cmgr = grpc.aio.secure_channel("mobile.deneb.prod.infotainment.pdx.atieva.com",
+    cmgr = grpc.aio.secure_channel(region.api_domain,
                                    grpc.ssl_channel_credentials())
 
     async with cmgr as channel:
@@ -142,14 +149,25 @@ async def grpc_dump_user_vehicles(username: str, password: str) -> str:
 
     return text
 
-async def grpc_set_user_avatar(username: str, password: str, avatar: bytes) -> Optional[str]:
-    async with LucidAPI() as api:
+async def grpc_set_user_avatar(username: str, password: str, avatar: bytes, region: Region) -> Optional[str]:
+    async with LucidAPI(region=region) as api:
         await api.login(username, password)
         url = await api.set_profile_photo(avatar)
 
     return url
 
-async def json_login_request(username: str, password: str) -> Any:
+async def grpc_get_referral_data(username: str, password: str, region: Region) -> ReferralData:
+    async with LucidAPI(region=region) as api:
+        await api.login(username, password)
+        return await api.get_referral_history()
+
+async def grpc_share_trip(username: str, password: str, region: Region, latitude: float, longitude: float) -> None:
+    async with LucidAPI(region=region) as api:
+        await api.login(username, password)
+        vehicle = api.vehicles[0]
+        return await api.share_trip(vehicle, latitude, longitude)
+
+async def json_login_request(username: str, password: str, region: Region) -> Any:
     request = {
         "username": username,
         "password": password,
@@ -164,7 +182,7 @@ async def json_login_request(username: str, password: str) -> Any:
         "user-agent": f"python-lucidmotors/0.1.1",
     }
 
-    cmgr = aiohttp.ClientSession("https://mobile.deneb.prod.infotainment.pdx.atieva.com",
+    cmgr = aiohttp.ClientSession("https://" + region.api_domain,
                                  headers=headers)
 
     async with cmgr as session:
@@ -188,12 +206,13 @@ async def json_login_request(username: str, password: str) -> Any:
         raw['userVehicleData'][i]['vehicleId'] = '[removed]'
         raw['userVehicleData'][i]['vehicleConfig']['vin'] = '[removed]'
         raw['userVehicleData'][i]['vehicleConfig']['emaId'] = '[removed]'
-        raw['userVehicleData'][i]['vehicleConfig']['chargingAccounts'][0][
-            'emaid'
-        ] = '[removed]'
-        raw['userVehicleData'][i]['vehicleConfig']['chargingAccounts'][0][
-            'vehicleId'
-        ] = '[removed]'
+        for ca in range(len(raw['userVehicleData'][i]['vehicleConfig']['chargingAccounts'])):
+            raw['userVehicleData'][i]['vehicleConfig']['chargingAccounts'][ca][
+                'emaid'
+            ] = '[removed]'
+            raw['userVehicleData'][i]['vehicleConfig']['chargingAccounts'][ca][
+                'vehicleId'
+            ] = '[removed]'
         raw['userVehicleData'][i]['vehicleState']['gps']['location'][
             'latitude'
         ] = '[removed]'
@@ -209,20 +228,32 @@ async def index():
         errors = []
         email = request.form.get('email', None)
         password = request.form.get('password', None)
+        region_code = request.form.get('region', None)
 
-        if email is None:
+        if not email:
             errors.append("Email address is a required field")
-        if password is None:
+        if not password:
             errors.append("Password is a required field")
+        if not region_code:
+            errors.append("Region is a required field")
+        else:
+            try:
+                region = Region(region_code)
+            except ValueError:
+                errors.append("Region is invalid")
 
         if errors:
+            print(datetime.now(), errors)
             return render_template("login.html", errors=errors)
 
-        grpc_text = await grpc_dump_user_vehicles(email, password)
+        try:
+            grpc_text = await grpc_dump_user_vehicles(email, password, region)
+        except grpc.aio.AioRpcError as err:
+            return render_template("login.html", errors=[err.details()])
 
         await asyncio.sleep(0.5)
 
-        raw_json = await json_login_request(email, password)
+        raw_json = await json_login_request(email, password, region)
         pretty_json = json.dumps(raw_json, indent=2)
 
         return render_template(
@@ -247,6 +278,7 @@ def submit():
         errors.append("Missing json data")
 
     if errors:
+        print(datetime.now(), errors)
         return render_template("login.html", errors=errors)
 
     data = grpc + '\n\n\n' + jsn
@@ -269,19 +301,28 @@ async def avatar():
         email = request.form.get('email', None)
         password = request.form.get('password', None)
         photo = request.files.get('photo', None)
+        region_code = request.form.get('region', None)
 
-        if email is None:
+        if not email:
             errors.append("Email address is a required field")
-        if password is None:
+        if not password:
             errors.append("Password is a required field")
         if photo is None:
             errors.append("Photo is a required field")
+        if not region_code:
+            errors.append("Region is a required field")
+        else:
+            try:
+                region = Region(region_code)
+            except ValueError:
+                errors.append("Region is invalid")
 
         if errors:
+            print(datetime.now(), errors)
             return render_template("avatar.html", errors=errors)
 
         try:
-            url = await grpc_set_user_avatar(email, password, photo.read())
+            url = await grpc_set_user_avatar(email, password, photo.read(), region)
         except APIError as exc:
             return render_template("avatar.html", errors=[str(exc)])
 
@@ -291,3 +332,81 @@ async def avatar():
         )
 
     return render_template("avatar.html")
+
+@app.route("/referrals", methods=["GET", "POST"])
+async def referrals():
+    if request.method == "POST":
+        errors = []
+        email = request.form.get('email', None)
+        password = request.form.get('password', None)
+        region_code = request.form.get('region', None)
+
+        if email is None:
+            errors.append("Email address is a required field")
+        if password is None:
+            errors.append("Password is a required field")
+        if region_code is None:
+            errors.append("Region is a required field")
+        else:
+            try:
+                region = Region(region_code)
+            except ValueError:
+                errors.append("Region is invalid")
+
+        if errors:
+            return render_template("referrals.html", errors=errors)
+
+        try:
+            data = await grpc_get_referral_data(email, password, region)
+        except (APIError, APIValueError) as exc:
+            return render_template("referrals.html", errors=[str(exc)])
+
+        return render_template(
+            "referrals_response.html",
+            data=data,
+        )
+
+    return render_template("referrals.html")
+
+@app.route("/trip", methods=["GET", "POST"])
+async def trip():
+    if request.method == "POST":
+        errors = []
+        email = request.form.get('email', None)
+        password = request.form.get('password', None)
+        region_code = request.form.get('region', None)
+        location = request.form.get('location', None)
+
+        if email is None:
+            errors.append("Email address is a required field")
+        if password is None:
+            errors.append("Password is a required field")
+        if region_code is None:
+            errors.append("Region is a required field")
+        else:
+            try:
+                region = Region(region_code)
+            except ValueError:
+                errors.append("Region is invalid")
+        if location is None:
+            errors.append("Coordinates is a required field")
+        else:
+            m = re.match(r'^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$', location)
+            if m is None:
+                errors.append("Coordinates are invalid. Should be latitude, longitude.")
+            else:
+                lat, lon = m.groups()
+
+        if errors:
+            return render_template("trip.html", errors=errors)
+
+        try:
+            await grpc_share_trip(email, password, region, float(lat), float(lon))
+        except (APIError, APIValueError) as exc:
+            return render_template("trip.html", errors=[str(exc)])
+
+        return render_template(
+            "trip_response.html",
+        )
+
+    return render_template("trip.html")

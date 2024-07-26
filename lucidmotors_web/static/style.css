@@ -4,7 +4,12 @@
 }
 
 header > h1 {
-    font-size: 2vw;
+    font-size: x-large;
+}
+
+header > h1 > center > a {
+    text-decoration: none;
+    color: inherit;
 }
 
 header {
@@ -28,7 +33,7 @@ footer > ul {
 
 label {
     display: block;
-    font-size: 1vw;
+    font-size: small;
 }
 
 input[type="password"], input[type="text"], input[type="email"] {
@@ -45,4 +50,22 @@ input[type="password"], input[type="text"], input[type="email"] {
     padding: 0.5em;
     color: MarkText;
     background-color: Mark;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+table, th, td {
+    border: 1px solid FieldText;
+}
+
+th, td {
+    text-align: left;
+    padding: 3px 1em 3px 1em;
+}
+
+img {
+    max-width: 100%;
 }
